@@ -1,4 +1,4 @@
-# DTO Planning
+# Flow Planning
 
 This document contains the planning structure for the flow of actions to be implemented in the app.
 
