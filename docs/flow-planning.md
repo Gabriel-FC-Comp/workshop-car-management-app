@@ -1,10 +1,13 @@
 # Flow Planning
+<!-- TODO: Add ServiceStatusUpdateAlertDTO to reduce amount of data in trafic -->
 
 This document contains the planning structure for the flow of actions to be implemented in the app.
 
-## New Service - Basic Flow
+## Main Flows
+
+### New Service - Basic Flow
 When a new service arrives and is scheduled for the next free time slot.
-> Assumes the mechanic is free, accepts the service, and does not need to wait for parts.
+> Assumes the mechanic is free, accepts the service, does not need to wait for parts, and the client approved the budget.
 
 ```mermaid
 sequenceDiagram
@@ -14,9 +17,182 @@ sequenceDiagram
     actor Mechanic
 
     Client->>Staff: Vehicle basic info and problem.
-    Staff-->>Server: NewVehicleDTO
-    Server-->>Mechanic: NewServiceAppointmentAlertDTO
+    Staff-->>+Server: NewVehicleDTO
+    Note over Staff, Server: Obs: Mechanic specified
+    par Server to Staff
+        Server -->>Staff: ServiceUpdateAlertDTO
+        Note over Server, Staff: Service Status:<br/>Pending Mechanic Acceptance
+    and Server to Mechanic
+        Server-->>Mechanic: NewServiceAppointmentAlertDTO
+    end
     Mechanic-->>Server: NewServiceAcceptanceDTO
-    Server -->>Staff: ServiceUpdateAlertDTO 
-    Note over Server, Staff: Service Status: Done 
+    Note over Mechanic, Server: Accepted
+    Server -->>-Staff: ServiceUpdateAlertDTO 
+    Note over Server, Staff: Service Status: Budgeting
+    par
+        Staff ->> +Client: Budget
+        Staff ->> Server: ServiceStatusUpdateDTO
+        Note over Staff, Server: Service Status: Awaiting Budget Approval
+        Server ->> Mechanic: ServiceUpdateDTO
+    end
+    Client ->> -Staff: Approval
+    Staff ->> +Server: ServiceStatusUpdateDTO
+    Note over Staff, Server: Service Status: Budget Approved
+    Server ->> Mechanic: ServiceUpdateAlertDTO
+    Note over Server, Mechanic: Service Status: Budget Approved
+    alt Staff signals
+        Staff ->> Server: ServiceStatusUpdateDTO
+        Note over Staff, Server: Service Status: Working on it
+        Server ->> Mechanic: ServiceUpdateAlertDTO
+        Note over Server, Mechanic: Service Status: Working on it
+    else Mechanic signals
+        Mechanic ->> Server: ServiceStatusUpdateDTO
+        Note over Mechanic, Server: Service Status: Working on it
+        Server ->> Staff: ServiceUpdateAlertDTO
+        Note over Server, Staff: Service Status: Working on it
+    end
+    alt Staff signals
+        Staff ->> Server: ServiceStatusUpdateDTO
+        Note over Staff, Server: Service Status: Done
+        Server ->> Mechanic: ServiceUpdateAlertDTO
+        Note over Server, Mechanic: Service Status: Done
+    else Mechanic signals
+        Mechanic ->> Server: ServiceStatusUpdateDTO
+        Note over Mechanic, Server: Service Status: Done
+        Server ->> -Staff: ServiceUpdateAlertDTO
+        Note over Server, Staff: Service Status: Done
+    end
+    Staff ->> Client: Inform the service is done 
+```
+
+### New Service - Expanded Flow
+When a new service arrives and is scheduled for the next free time slot.
+> Assumes there is no mechanic free the first moment, when one is appointed he accepts the service, some parts are missing, and the client accepts the budget.
+
+```mermaid
+sequenceDiagram
+    actor Client
+    actor Staff
+    participant Server
+    actor Mechanic
+
+    Client->>Staff: Vehicle basic info and problem.
+    Staff-->>+Server: NewVehicleDTO
+    Server -->>Staff: ServiceUpdateAlertDTO
+    Note over Server, Staff: Service Status:<br/>Waiting Mechanic Appointment 
+
+    Staff-->>+Server: ServiceUpdateDTO
+    Note over Staff, Server: Appointing Mechanic
+    par Server to Staff
+        Server -->>Staff: ServiceUpdateAlertDTO
+        Note over Server, Staff: Service Status:<br/>Pending Mechanic Acceptance
+    and Server to Mechanic
+        Server-->>Mechanic: NewServiceAppointmentAlertDTO
+    end
+    
+    Mechanic-->>Server: NewServiceAcceptanceDTO
+    Note over Mechanic, Server: Accepted
+    Server -->>-Staff: ServiceUpdateAlertDTO 
+    Note over Server, Staff: Service Status: Budgeting
+    Staff ->> +Client: Budget
+    Client ->> -Staff: Approval
+    Staff ->> +Server: ServiceUpdateDTO
+    Note over Staff, Server: Service Status: Budget Approved
+    Server ->> Mechanic: ServiceUpdateAlertDTO
+    Note over Server, Mechanic: Service Status: Budget Approved
+
+    loop
+        alt Staff signals
+            Staff ->> Server: ServiceStatusUpdateDTO
+            Note over Staff, Server: Service Status: Working on it
+            Server ->> Mechanic: ServiceStatusUpdateDTO
+            Note over Server, Mechanic: Service Status: Working on it
+        else Mechanic signals
+            Mechanic ->> Server: ServiceStatusUpdateDTO
+            Note over Mechanic, Server: Service Status: Working on it
+            Server ->> Staff: ServiceStatusUpdateDTO
+            Note over Server, Staff: Service Status: Working on it
+        end
+
+        opt
+            alt Staff signals
+                Staff ->> Server: ServiceStatusUpdateDTO
+                Note over Staff, Server: Service Status: Waiting for parts
+                Server ->> Mechanic: ServiceStatusUpdateDTO
+                Note over Server, Mechanic: Service Status: Waiting for parts
+            else Mechanic signals
+                Mechanic ->> Server: ServiceStatusUpdateDTO
+                Note over Mechanic, Server: Service Status: Waiting for parts
+                Server ->> Staff: ServiceStatusUpdateDTO
+                Note over Server, Staff: Service Status: Waiting for parts
+            end
+        end
+    end
+
+
+    alt Staff signals
+        Staff ->> Server: ServiceStatusUpdateDTO
+        Note over Staff, Server: Service Status: Done
+        Server ->> Mechanic: ServiceStatusUpdateDTO
+        Note over Server, Mechanic: Service Status: Done
+    else Mechanic signals
+        Mechanic ->> Server: ServiceStatusUpdateDTO
+        Note over Mechanic, Server: Service Status: Done
+        Server ->> -Staff: ServiceStatusUpdateDTO
+        Note over Server, Staff: Service Status: Done
+    end
+    
+    Staff ->> Client: Inform the service is done 
+```
+
+## Other Flows
+
+### Mechanic does not accept
+When the mechanic does not accept the service, it awaits a new appointment or, rarely, to be canceled.
+
+```mermaid
+sequenceDiagram
+    actor Staff
+    participant Server
+    actor Mechanic1 as Mechanic 1
+    actor Mechanic2 as Mechanic 2
+    
+    Note over Staff, Mechanic2: ...
+    Staff-->>+Server: NewVehicleDTO
+    Server -->>Staff: ServiceUpdateAlertDTO
+    Note over Server, Staff: Service Status:<br/>Waiting Mechanic Appointment 
+
+    Staff-->>+Server: ServiceUpdateDTO
+    Note over Staff, Server: Appointing Mechanic 1
+    par Server to Staff
+        Server -->>Staff: ServiceUpdateAlertDTO
+        Note over Server, Staff: Service Status:<br/>Pending Mechanic Acceptance
+    and Server to Mechanic1
+        Server-->>Mechanic1: NewServiceAppointmentAlertDTO
+    end
+    
+    Mechanic1-->>Server: NewServiceAcceptanceDTO
+    Note over Mechanic1, Server: Rejected
+    Server -->>-Staff: ServiceUpdateAlertDTO
+    Note over Server, Staff: Service Status:<br/>Waiting Mechanic Appointment
+
+    alt new Mechanic appointment
+        Staff-->>+Server: ServiceUpdateDTO
+        Note over Staff, Server: Appointing Mechanic 2
+        par Server to Staff
+            Server -->>Staff: ServiceUpdateAlertDTO
+            Note over Server, Staff: Service Status:<br/>Pending Mechanic Acceptance
+        and Server to Mechanic2
+            Server-->>Mechanic2: NewServiceAppointmentAlertDTO
+        end
+        
+        Mechanic2-->>Server: NewServiceAcceptanceDTO
+        Note over Mechanic2, Server: Accepted
+        Server -->>-Staff: ServiceUpdateAlertDTO
+        Note over Server, Staff: Service Status:<br/>Budgeting
+        Note over Staff, Mechanic2: ...
+    else cancellation
+        Staff ->> Server: ServiceUpdateDTO
+        Note over Staff, Server: Obs + Service Status: Canceled
+    end 
 ```
