@@ -64,6 +64,9 @@ When a service info is updated in the server, the server emmits an alert to the 
     - *Scheduled*;
     - *Waiting Mechanic Appointment*;
     - *Pending Mechanic Acceptance*;
+    - *Budgeting*;
+    - *Awaiting Budget Approval*; 
+    - *Budget Approved*;
     - *Working On It*;
     - *Waiting for Parts*;
     - *Done*, or;
